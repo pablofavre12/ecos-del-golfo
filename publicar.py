@@ -202,7 +202,7 @@ def _pagina(titulo: str, activo: str, cuerpo: str, extra_js: str = "") -> str:
 <style>{ESTILO}</style>
 </head>
 <body>
-<div class="banner-demo">⚠️ Demostración con datos sintéticos — los sonidos reales del Golfo se cargan próximamente</div>
+<div class="banner-demo">🎧 Grabaciones reales del Golfo Nuevo — registradas desde Puerto Pirámides · agosto 2026</div>
 <header class="portada">
   <h1>Ecos <span>del Golfo</span></h1>
   <p class="bajada">Una biblioteca abierta del paisaje sonoro del mar de Península Valdés
