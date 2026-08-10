@@ -1,8 +1,10 @@
-# Ecos del Golfo — Wow 1: prototipo del tablero
+# Ecos del Golfo — tablero de revisión + búsqueda inversa + vitrina
 
-Prototipo local del tablero de revisión de la biblioteca acústica del Golfo
-(WCH-467). Tres piezas: generador de fixtures sintéticos, importador a SQLite
-y tablero web local con salud del catálogo, explorador y cola de revisión.
+Prototipo local de la biblioteca acústica del Golfo. Wow 1 (WCH-467): generador
+de fixtures sintéticos, importador a SQLite y tablero web local con salud del
+catálogo, explorador y cola de revisión. Wow 2 (WCH-468): búsqueda inversa por
+similitud ("¿qué otros clips suenan como este?") y la vitrina pública estática
+para GitHub Pages.
 
 El catálogo (SQLite, `ecos.db`) es la **única fuente de verdad** de conteos y
 estados (D10 del contrato de producto): todo lo que ves en el tablero sale de
@@ -22,7 +24,9 @@ pip install -r requirements.txt
 
 python generar_fixtures.py      # genera fixtures/ (CSVs + clips + espectrogramas)
 python importar.py fixtures     # carga todo a ecos.db (idempotente)
+python indexar.py               # indexa embeddings para la búsqueda inversa
 python tablero.py               # → http://localhost:8477
+python publicar.py              # regenera la vitrina pública en docs/
 ```
 
 ## Estructura
@@ -37,8 +41,13 @@ base.py               esquema SQLite + conexión + registro de veredictos
                       (compartido por importador, tablero y tests)
 tablero.py            servidor web local (stdlib http.server, HTML server-rendered,
                       CSS propio, sin JS externo — todo offline)
-tests/                pytest: importador feliz, esquema cambiado, idempotencia,
-                      escritura de veredictos
+embeddings.py         interfaz Embedder + EmbedderEspectral (numpy) y el
+                      adaptador EmbedderPerch para producción
+indexar.py            CLI: puebla la tabla embedding de ecos.db (idempotente)
+publicar.py           CLI: genera la vitrina estática en docs/ y el respaldo
+                      del catálogo en respaldo/ (R20)
+tests/                pytest: importador, veredictos, embedder determinista,
+                      búsqueda inversa y vitrina
 ```
 
 ## Las tres vistas del tablero
@@ -51,6 +60,51 @@ tests/                pytest: importador feliz, esquema cambiado, idempotencia,
 - **Cola de revisión** (`/cola`): los segmentos `propuesto` de a uno.
   Espectrograma y play primero, veredicto segundo, metadata tercero (EA3).
   Cada veredicto queda asentado en SQLite con timestamp y revisor.
+
+## Búsqueda inversa (R10)
+
+Cada clip del catálogo se vectoriza y la vista `/similares/<filename>` del
+tablero (botón **🔍 Buscar parecidos** en cada tarjeta y en la cola) muestra el
+top-10 por similitud coseno, con su score, espectrograma y play.
+
+```bash
+python indexar.py               # idempotente: indexa solo lo que falta
+python indexar.py --embedder perch   # producción, ver nota abajo
+```
+
+El diseño es **enchufable** (`embeddings.py`):
+
+- `EmbedderEspectral` (default) funciona hoy con numpy puro: banco de 32
+  filtros log-espaciados sobre el espectro (tipo mel simplificado) con
+  estadísticas temporales por banda, normalizado y determinista. Alcanza para
+  que los fixtures del mismo tipo se encuentren entre sí.
+- `EmbedderPerch` es el adaptador para los **datos reales**: usa
+  [perch-hoplite](https://github.com/google-research/perch-hoplite) (Google),
+  que arrastra TensorFlow y por eso **no se instala en este repo de
+  desarrollo**. En la máquina del admin: `pip install perch-hoplite` y correr
+  `python indexar.py --embedder perch`. La tabla `embedding` asienta con qué
+  embedder se indexó cada clip, así que cambiar de embedder re-indexa solo.
+
+## Vitrina pública (`docs/`)
+
+`python publicar.py` regenera el sitio estático de GitHub Pages en `docs/`
+desde `ecos.db`:
+
+- Publica **solo los segmentos confirmados** — los propuestos y descartados
+  nunca llegan a la vitrina.
+- `index.html`: catálogo con filtros por tipo (JS vanilla inline, sin CDNs ni
+  requests externos — autocontenido, con los clips y espectrogramas copiados a
+  `docs/media/`).
+- `bitacora.html`: la **Bitácora de sonidos** — 5 sonidos curados de tipos
+  distintos, con descripciones apoyadas en Clark (1982).
+- Banner fijo en todas las páginas: *demostración con datos sintéticos* — que
+  nadie confunda fixtures con ciencia. Todo clip lleva el badge **HIPÓTESIS**
+  (identificación pendiente de validación experta, EA2).
+- Cada publicación además **respalda el catálogo** (R20):
+  `respaldo/catalogo-export.csv` (dump completo con veredictos, se commitea)
+  y una copia de `ecos.db` con timestamp (solo local).
+
+Para servirla: GitHub Pages → *Deploy from a branch* → `main` /`docs/`.
 
 ## Nomenclatura de datos (esquema §5.3 del informe exploratorio)
 
