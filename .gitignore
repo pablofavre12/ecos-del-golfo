@@ -8,6 +8,9 @@ fixtures/
 datos/
 crudos/
 *.WAV
+# …pero los clips SINTÉTICOS de la vitrina sí se publican (en macOS git
+# ignora mayúsculas/minúsculas y *.WAV pisa también los .wav de docs/)
+!docs/media/clips/*.wav
 
 # Respaldo del catálogo (R20): las copias .db quedan solo locales,
 # el export CSV más reciente SÍ se commitea (backup en la nube vía el repo)
