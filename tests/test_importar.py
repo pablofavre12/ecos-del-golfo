@@ -49,8 +49,11 @@ def test_importador_feliz(carpeta_fixtures, ruta_db):
         contar(ruta_db, "SELECT COUNT(*) FROM segmento WHERE fuente = 'muelle-madryn-2025-10'")
         == 23
     )
-    # No hubo espectrogramas en este fixture → los reporta como faltantes, sin fallar
-    assert len(reporte.espectrogramas_faltantes) == 58
+    # No hubo espectrogramas en este fixture → el importador los GENERA
+    # (comportamiento del gate WCH-467: los datos reales no traen PNGs).
+    assert len(reporte.espectrogramas_faltantes) == 0
+    generados = list((reporte.carpeta / "espectrogramas").glob("*.png"))
+    assert len(generados) == 58
 
 
 def test_columnas_cambiadas_reporta_sin_explotar(tmp_path, ruta_db):

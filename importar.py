@@ -93,6 +93,32 @@ def _resolver_columnas(cabecera: list[str], reporte: ReporteArchivo) -> dict[str
     return mapa
 
 
+# Vocabulario de estados de los CSV reales de la sesión exploratoria
+# (ajuste mínimo del gate WCH-467: mapear, no rechazar).
+SINONIMOS_ESTADO = {
+    "clasificado": "confirmado",
+    "pendiente_revision": "propuesto",
+    "pendiente": "propuesto",
+}
+
+
+def _normalizar_estado(crudo: str) -> str | None:
+    """Mapea el status del CSV al vocabulario del catálogo; None si no se reconoce."""
+    valor = (crudo or "").strip().lower()
+    if valor in ESTADOS_VALIDOS:
+        return valor
+    if valor in SINONIMOS_ESTADO:
+        return SINONIMOS_ESTADO[valor]
+    if valor.startswith("descartado"):  # ej. "descartado_no_tonal_no_impulsivo"
+        return "descartado"
+    return None
+
+
+def _normalizar_tipo(crudo: str) -> str:
+    """'pulsive_call (dudoso, muy corto)' → 'pulsive_call' (la nota no es el tipo)."""
+    return (crudo or "").split(" (")[0].split("(")[0].strip()
+
+
 def _importar_csv(con, ruta_csv: Path, carpeta: Path, reporte: Reporte, es_candidatos: bool):
     rep = ReporteArchivo(nombre=ruta_csv.name)
     reporte.archivos.append(rep)
@@ -129,14 +155,20 @@ def _importar_csv(con, ruta_csv: Path, carpeta: Path, reporte: Reporte, es_candi
             rep.filas_invalidas.append((nro, "sin type"))
             continue
 
+        fila["type"] = _normalizar_tipo(fila["type"])
+
         if es_candidatos:
             # Candidato sin veredicto de escucha → entra como propuesto.
             oido = fila.get("confirmed_by_ear", "")
             estado = "confirmado" if oido.lower() in ("si", "sí", "yes", "true", "1") else "propuesto"
         else:
-            estado = fila.get("status", "") or "propuesto"
-            if estado not in ESTADOS_VALIDOS:
-                rep.filas_invalidas.append((nro, f"status desconocido: {estado!r}"))
+            estado = _normalizar_estado(fila.get("status", "")) or (
+                "propuesto" if not fila.get("status") else None
+            )
+            if estado is None:
+                rep.filas_invalidas.append(
+                    (nro, f"status desconocido: {fila.get('status')!r}")
+                )
                 continue
 
         try:
@@ -146,10 +178,26 @@ def _importar_csv(con, ruta_csv: Path, carpeta: Path, reporte: Reporte, es_candi
             continue
 
         ruta_clip = clips / fila["filename"]
+        if not ruta_clip.exists():
+            # Ajuste del gate: los clips reales viven en subcarpetas por tipo.
+            hallados = sorted(carpeta.rglob(fila["filename"]))
+            if hallados:
+                ruta_clip = hallados[0]
         ruta_espectro = espectros / (Path(fila["filename"]).stem + ".png")
         if not ruta_clip.exists():
             reporte.clips_faltantes.append(fila["filename"])
-        if not ruta_espectro.exists():
+        if not ruta_espectro.exists() and ruta_clip.exists():
+            # Los datos reales no traen espectrogramas: se generan acá.
+            try:
+                from generar_fixtures import escribir_espectrograma
+
+                espectros.mkdir(parents=True, exist_ok=True)
+                escribir_espectrograma(ruta_clip, ruta_espectro)
+            except Exception as e:  # noqa: BLE001 — reportar, no romper
+                reporte.espectrogramas_faltantes.append(
+                    f"{ruta_espectro.name} (falló generación: {e})"
+                )
+        elif not ruta_espectro.exists():
             reporte.espectrogramas_faltantes.append(ruta_espectro.name)
 
         existia = con.execute(
