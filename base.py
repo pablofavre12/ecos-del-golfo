@@ -43,6 +43,14 @@ CREATE TABLE IF NOT EXISTS segmento (
     creado_en           TEXT NOT NULL DEFAULT (datetime('now')),
     actualizado_en      TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS embedding (
+    filename   TEXT PRIMARY KEY REFERENCES segmento(filename),
+    embedder   TEXT NOT NULL,
+    dimension  INTEGER NOT NULL,
+    vector     BLOB NOT NULL,
+    creado_en  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 

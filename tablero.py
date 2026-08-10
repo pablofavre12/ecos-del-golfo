@@ -17,6 +17,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import base
+import embeddings
 
 PUERTO = 8477
 
@@ -129,6 +130,15 @@ select {
 .logro .emoji { font-size: 3rem; }
 .logro h2 { margin-top: 0.8rem; }
 .logro p { color: var(--tenue); margin-top: 0.4rem; }
+.boton-similares {
+  display: inline-block; margin-top: 0.55rem; font-size: 0.8rem; padding: 0.28rem 0.7rem;
+  border: 1px solid var(--borde); border-radius: 5px; background: var(--panel-2); color: var(--texto);
+}
+.boton-similares:hover { border-color: var(--acento); text-decoration: none; }
+.badge-score {
+  font-size: 0.78rem; font-weight: 700; padding: 0.16rem 0.5rem; border-radius: 4px;
+  background: var(--acento-fuerte); color: #14100a;
+}
 """
 
 
@@ -172,7 +182,14 @@ def badge_hipotesis() -> str:
     )
 
 
-def tarjeta_segmento(s: sqlite3.Row) -> str:
+def boton_similares(filename: str) -> str:
+    return (
+        f'<a class="boton-similares" href="/similares/{e(filename)}" '
+        'title="Buscar clips que suenan parecido">🔍 Buscar parecidos</a>'
+    )
+
+
+def tarjeta_segmento(s: sqlite3.Row, score: float | None = None) -> str:
     tipo = s["tipo_corregido"] or s["tipo"]
     estado = s["estado"]
     espectro = (
@@ -185,16 +202,19 @@ def tarjeta_segmento(s: sqlite3.Row) -> str:
         if s["clip_path"]
         else '<p class="meta">clip no disponible</p>'
     )
+    badge_score = f'<span class="badge-score">{score * 100:.0f}%</span>' if score is not None else ""
     return f"""<article class="segmento">
   {espectro}
   <div class="cuerpo">
     <div class="fila-badges">
+      {badge_score}
       <span class="badge-tipo">{e(tipo)}</span>
       {badge_hipotesis()}
       <span class="chip {e(estado)}">{e(ETIQUETA_ESTADO.get(estado, estado))}</span>
     </div>
     {audio}
     <p class="meta">{e(s["fecha_hora_absoluta"] or "sin fecha")} · {e(s["fuente"])}</p>
+    {boton_similares(s["filename"])}
   </div>
 </article>"""
 
@@ -391,6 +411,7 @@ def vista_cola(con: sqlite3.Connection) -> str:
     <div class="fila-badges" style="margin-bottom:0.6rem">
       <span class="badge-tipo">{e(s["tipo"])}</span>
       {badge_hipotesis()}
+      {boton_similares(s["filename"])}
     </div>
     <dl>
       <dt>Archivo</dt><dd>{e(s["filename"])}</dd>
@@ -402,6 +423,70 @@ def vista_cola(con: sqlite3.Connection) -> str:
   </div>
 </div>"""
     return pagina("Cola de revisión", "cola", cuerpo)
+
+
+def vista_similares(con: sqlite3.Connection, filename: str) -> str:
+    s = con.execute("SELECT * FROM segmento WHERE filename = ?", (filename,)).fetchone()
+    if not s:
+        cuerpo = f"""<h2>Búsqueda inversa</h2>
+<div class="vacio">
+  <p><strong>Ese segmento no está en el catálogo.</strong></p>
+  <p><code>{e(filename)}</code> — <a href="/explorador">volver al explorador</a></p>
+</div>"""
+        return pagina("Búsqueda inversa", "explorador", cuerpo)
+
+    # Estado vacío como feature (EA1): sin índice, la vista te dice qué correr.
+    if not embeddings.hay_indice(con):
+        cuerpo = """<h2>Búsqueda inversa</h2>
+<div class="vacio">
+  <p><strong>Todavía no hay índice de embeddings.</strong></p>
+  <p>Generalo con <code>python indexar.py</code> y volvé a esta página:
+  cada clip del catálogo queda vectorizado y esta vista te muestra los que suenan parecido.</p>
+</div>"""
+        return pagina("Búsqueda inversa", "explorador", cuerpo)
+
+    resultados = embeddings.similares(con, filename, n=10)
+    if resultados is None:
+        cuerpo = """<h2>Búsqueda inversa</h2>
+<div class="vacio">
+  <p><strong>Este clip todavía no está indexado.</strong></p>
+  <p>Corré <code>python indexar.py</code> para ponerlo al día
+  (indexa solo lo que falta) y volvé a esta página.</p>
+</div>"""
+        return pagina("Búsqueda inversa", "explorador", cuerpo)
+
+    tipo = s["tipo_corregido"] or s["tipo"]
+    espectro = (
+        f'<img src="/media/espectro/{e(filename)}" alt="Espectrograma de {e(filename)}">'
+        if s["espectrograma_path"]
+        else '<div class="vacio">sin espectrograma para este segmento</div>'
+    )
+    audio = (
+        f'<audio controls preload="auto" src="/media/clip/{e(filename)}"></audio>'
+        if s["clip_path"]
+        else '<p class="meta">clip no disponible</p>'
+    )
+
+    tarjetas = []
+    for otro, score in resultados:
+        fila = con.execute("SELECT * FROM segmento WHERE filename = ?", (otro,)).fetchone()
+        if fila:
+            tarjetas.append(tarjeta_segmento(fila, score=score))
+
+    cuerpo = f"""<h2>Suenan parecido a este clip</h2>
+<div class="heroe">
+  {espectro}
+  {audio}
+  <div class="fila-badges" style="margin-top:0.9rem">
+    <span class="badge-tipo">{e(tipo)}</span>
+    {badge_hipotesis()}
+    <span class="chip {e(s["estado"])}">{e(ETIQUETA_ESTADO.get(s["estado"], s["estado"]))}</span>
+  </div>
+  <p class="meta">{e(filename)} · {e(s["fuente"])} · {e(s["fecha_hora_absoluta"] or "sin fecha")}</p>
+</div>
+<h3 style="margin:1.6rem 0 1rem">Top {len(tarjetas)} por similitud coseno</h3>
+<div class="grilla">{"".join(tarjetas)}</div>"""
+    return pagina("Búsqueda inversa", "explorador", cuerpo)
 
 
 # ---------- servidor ----------
@@ -450,6 +535,8 @@ class Manejador(BaseHTTPRequestHandler):
                 self._responder(vista_explorador(con, filtros))
             elif url.path == "/cola":
                 self._responder(vista_cola(con))
+            elif url.path.startswith("/similares/"):
+                self._responder(vista_similares(con, url.path.removeprefix("/similares/")))
             elif url.path.startswith("/media/clip/"):
                 self._servir_media(con, "clip", url.path.removeprefix("/media/clip/"))
             elif url.path.startswith("/media/espectro/"):
