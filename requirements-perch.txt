@@ -1,0 +1,8 @@
+# El "oído" de producción — Perch v2 (Google DeepMind), variante ONNX.
+# Opcional: el tablero y la búsqueda funcionan sin esto usando el embedder
+# espectral liviano. Instalar para la búsqueda por similitud de verdad:
+#   pip install -r requirements-perch.txt
+#   python indexar.py --embedder perch
+# La primera corrida descarga los pesos del modelo (cientos de MB, cacheados).
+perch-hoplite
+onnxruntime

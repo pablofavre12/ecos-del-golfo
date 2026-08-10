@@ -65,30 +65,63 @@ class EmbedderEspectral(Embedder):
 
 
 class EmbedderPerch(Embedder):
-    """Adaptador para producción: embeddings de Perch (perch-hoplite).
+    """Adaptador de producción: Perch v2 (variante ONNX, vía perch-hoplite).
 
-    NO se instala en este repo de desarrollo (arrastra TensorFlow). Es para
-    la máquina del admin con los datos reales — ver README.
+    El "oído" entrenado de Google DeepMind. Requiere `perch-hoplite` y
+    `onnxruntime` (ver requirements-perch.txt); la primera corrida descarga
+    los pesos del modelo (cientos de MB, quedan cacheados). El modelo espera
+    ventanas de 5 s a su sample rate nativo: acá se resamplea (interpolación
+    lineal), se parte en ventanas, se embeddea cada una y se promedia.
     """
 
-    nombre = "perch-hoplite"
-    dimension = 1280
+    nombre = "perch-v2-onnx-v1"
+    dimension = 0  # se fija al cargar el modelo (Perch v2: 1536)
+    _modelo = None  # cache de clase: el modelo se carga UNA vez por proceso
+
+    @classmethod
+    def _cargar_modelo(cls):
+        if cls._modelo is None:
+            try:
+                from perch_hoplite.zoo import model_configs
+            except ImportError as err:
+                raise RuntimeError(
+                    "EmbedderPerch requiere perch-hoplite + onnxruntime:\n"
+                    "  pip install -r requirements-perch.txt\n"
+                    "y después: python indexar.py --embedder perch"
+                ) from err
+            cls._modelo = model_configs.load_model_by_name(
+                model_configs.ModelConfigName.PERCH_V2_ONNX
+            )
+        return cls._modelo
 
     def embed(self, ruta_wav: Path) -> np.ndarray:
-        try:
-            from perch_hoplite.zoo import model_configs  # noqa: F401
-        except ImportError as err:
-            raise RuntimeError(
-                "EmbedderPerch requiere perch-hoplite, que no está instalado en "
-                "esta máquina (y no debe instalarse en el entorno de desarrollo: "
-                "arrastra TensorFlow). En la máquina del admin con datos reales:\n"
-                "  pip install perch-hoplite\n"
-                "y después: python indexar.py --embedder perch"
-            ) from err
-        raise NotImplementedError(
-            "Adaptador Perch pendiente de cablear contra datos reales (WCH-468 "
-            "deja la interfaz; el cableado se hace con los audios del Golfo)."
-        )
+        modelo = self._cargar_modelo()
+        y, sr = _leer_wav(ruta_wav)
+        objetivo = int(modelo.sample_rate)
+        if sr != objetivo:
+            x_old = np.linspace(0.0, 1.0, num=len(y))
+            x_new = np.linspace(0.0, 1.0, num=max(1, int(len(y) * objetivo / sr)))
+            y = np.interp(x_new, x_old, y)
+        y = y.astype(np.float32)
+
+        largo_ventana = 5 * objetivo
+        if len(y) <= largo_ventana:
+            ventanas = [np.pad(y, (0, largo_ventana - len(y)))]
+        else:
+            ventanas = [
+                np.pad(y[i : i + largo_ventana], (0, max(0, largo_ventana - len(y[i : i + largo_ventana]))))
+                for i in range(0, len(y), largo_ventana)
+            ]
+
+        vectores = []
+        for ventana in ventanas:
+            salida = modelo.embed(ventana)
+            emb = np.asarray(salida.embeddings, dtype=np.float32)
+            vectores.append(emb.reshape(-1, emb.shape[-1]).mean(axis=0))
+        vector = np.mean(vectores, axis=0).astype(np.float32)
+        type(self).dimension = int(vector.shape[0])
+        norma = float(np.linalg.norm(vector))
+        return vector / norma if norma > 0 else vector
 
 
 EMBEDDERS = {"espectral": EmbedderEspectral, "perch": EmbedderPerch}
