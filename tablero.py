@@ -754,10 +754,29 @@ def vista_explorador(con: sqlite3.Connection, filtros: dict) -> str:
     return pagina("Explorador", "explorador", cuerpo, pendientes=pendientes)
 
 
+def quien_propuso(s: sqlite3.Row) -> tuple[str, float | None]:
+    """(nombre en criollo del motor que propuso el segmento, confianza 0-1).
+
+    `tipo_propuesto_por` / `confianza` los escribe la ingesta (WCH-471);
+    para los históricos de la sesión exploratoria la confianza es NULL.
+    """
+    claves = s.keys()
+    por = s["tipo_propuesto_por"] if "tipo_propuesto_por" in claves else None
+    confianza = s["confianza"] if "confianza" in claves else None
+    if por and por.startswith("clasificador-v"):
+        return f"El clasificador {por.removeprefix('clasificador-')}", confianza
+    if por == "vecinos":
+        return "El voto de vecinos por embedding", confianza
+    return "La máquina", confianza
+
+
 def motivo_en_cola(s: sqlite3.Row) -> str:
     """Explica en criollo por qué este segmento espera veredicto humano."""
     dur = duracion_clip(s["clip_path"])
-    partes = [f"La máquina lo propuso como <strong>{e(s['tipo'])}</strong>"]
+    quien, confianza = quien_propuso(s)
+    partes = [f"{quien} lo propuso como <strong>{e(s['tipo'])}</strong>"]
+    if confianza is not None:
+        partes.append(f" con <span class='num'>{confianza * 100:.0f}%</span> de confianza")
     if "dudoso" in (s["filename"] or ""):
         partes.append(" pero lo marcó <strong>dudoso</strong>")
     frase = "".join(partes) + "."
