@@ -108,10 +108,13 @@ def test_publicar_solo_confirmados(db_indexada, tmp_path):
         assert filename not in clips_publicados
     assert clips_publicados <= confirmados
 
-    # La cara pública mantiene sus garantías: banner de sintéticos en TODAS
+    # La cara pública mantiene sus garantías: banner de procedencia en TODAS
     # las páginas y badge HIPÓTESIS (EA2).
+    # (Actualizado en WCH-470: el commit 4332e63 cambió el banner a
+    # "Grabaciones reales del Golfo Nuevo" al publicar los datos reales y el
+    # test quedó atrás — el contrato vigente es el banner fijo .banner-demo.)
     for pagina in (indice, bitacora):
-        assert "Demostración con datos sintéticos" in pagina
+        assert "Grabaciones reales del Golfo Nuevo" in pagina
         assert "HIPÓTESIS" in pagina
 
 
