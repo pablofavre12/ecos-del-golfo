@@ -12,6 +12,14 @@ Vistas:
   /explorador  Catálogo completo con filtros.
   /similares/  Búsqueda inversa por embedding.
 
+API JSON (WCH-473, consumida por la web Next en web/):
+  GET  /api/panel                 funnel + salud por campaña + actividad
+  GET  /api/cola?pos=N            segmento actual de la cola con contexto
+  GET  /api/segmentos?tipo=&estado=&fuente=&pagina=   explorador paginado
+  GET  /api/similares/<filename>  top-10 por similitud coseno
+  GET  /api/pendientes            contador para el badge de navegación
+  POST /api/veredicto             mismo contrato del form, respuesta JSON
+
 Uso: python tablero.py  →  http://localhost:8477
 """
 
@@ -19,6 +27,7 @@ from __future__ import annotations
 
 import csv
 import html
+import json
 import sqlite3
 import sys
 import wave
@@ -485,6 +494,18 @@ def contar_pendientes(con: sqlite3.Connection) -> int:
     return con.execute("SELECT COUNT(*) FROM segmento WHERE estado = 'propuesto'").fetchone()[0]
 
 
+def alertas_campania(pct: dict[str, float]) -> list[str]:
+    """Alertas de salud por campaña (R19) — compartidas por la vista HTML y la API."""
+    alertas = []
+    if pct["desconocido"] >= 15:
+        alertas.append(f"{pct['desconocido']:.0f}% de segmentos desconocidos — tasa anómala")
+    if pct["descartado"] >= 30:
+        alertas.append(f"{pct['descartado']:.0f}% descartados — revisar calidad de la campaña")
+    if pct["propuesto"] >= 70:
+        alertas.append(f"{pct['propuesto']:.0f}% sin revisar — la campaña está casi toda pendiente")
+    return alertas
+
+
 # ---------- vistas ----------
 
 
@@ -606,13 +627,7 @@ hipótesis de trabajo hasta que la valide un experto independiente (ICB / CENPAT
             ("desconocido", "desconocidos"),
         )}
 
-        alertas = []
-        if pct["desconocido"] >= 15:
-            alertas.append(f"{pct['desconocido']:.0f}% de segmentos desconocidos — tasa anómala")
-        if pct["descartado"] >= 30:
-            alertas.append(f"{pct['descartado']:.0f}% descartados — revisar calidad de la campaña")
-        if pct["propuesto"] >= 70:
-            alertas.append(f"{pct['propuesto']:.0f}% sin revisar — la campaña está casi toda pendiente")
+        alertas = alertas_campania(pct)
         alerta_html = "".join(
             f'<div class="alerta"><strong>ALERTA</strong> · {e(a)}</div>' for a in alertas
         )
@@ -1124,6 +1139,266 @@ def vista_similares(con: sqlite3.Connection, filename: str) -> str:
     return pagina("Búsqueda inversa", "explorador", cuerpo, pendientes=pendientes)
 
 
+# ---------- API JSON (WCH-473) ----------
+#
+# Misma lógica y mismas queries que las vistas HTML de arriba, expuestas como
+# JSON para la web Next (web/). El tablero HTML v2 sigue siendo el fallback
+# sin Node; la fuente de verdad no cambia: ecos.db.
+
+PAGINA_TAMANIO = 24
+
+
+def segmento_json(s: sqlite3.Row, score: float | None = None) -> dict:
+    """Serialización canónica de un segmento para la API."""
+    d = {
+        "filename": s["filename"],
+        "tipo": s["tipo"],
+        "tipo_corregido": s["tipo_corregido"],
+        "tipo_efectivo": s["tipo_corregido"] or s["tipo"],
+        "estado": s["estado"],
+        "fuente": s["fuente"],
+        "fecha_hora_absoluta": s["fecha_hora_absoluta"],
+        "fecha_linda": fecha_linda(s["fecha_hora_absoluta"]),
+        "espectrograma": bool(s["espectrograma_path"]),
+        "clip": bool(s["clip_path"]),
+    }
+    if score is not None:
+        d["score"] = round(float(score), 4)
+    return d
+
+
+def api_panel(con: sqlite3.Connection) -> dict:
+    """Funnel del pipeline + salud por campaña (R19) + actividad reciente."""
+    tot = con.execute(
+        """
+        SELECT COUNT(*)                    AS detectados,
+               COUNT(DISTINCT fuente)      AS fuentes,
+               SUM(estado = 'propuesto')   AS pendientes,
+               SUM(estado = 'confirmado')  AS confirmados,
+               SUM(revisor IS NOT NULL)    AS revisados
+        FROM segmento
+        """
+    ).fetchone()
+    pendientes = tot["pendientes"] or 0
+    revisados = tot["revisados"] or 0
+    en_cola = pendientes + revisados
+
+    vitrina = publicados_en_vitrina()
+
+    campanias = []
+    for c in con.execute(
+        """
+        SELECT fuente,
+               COUNT(*) AS total,
+               SUM(estado = 'propuesto')   AS propuestos,
+               SUM(estado = 'confirmado')  AS confirmados,
+               SUM(estado = 'descartado')  AS descartados,
+               SUM(estado = 'desconocido') AS desconocidos
+        FROM segmento GROUP BY fuente ORDER BY fuente
+        """
+    ).fetchall():
+        total = c["total"]
+        pct = {
+            clave: 100.0 * (c[col] or 0) / total
+            for clave, col in (
+                ("propuesto", "propuestos"),
+                ("confirmado", "confirmados"),
+                ("descartado", "descartados"),
+                ("desconocido", "desconocidos"),
+            )
+        }
+        campanias.append(
+            {
+                "fuente": c["fuente"],
+                "total": total,
+                "propuestos": c["propuestos"] or 0,
+                "confirmados": c["confirmados"] or 0,
+                "descartados": c["descartados"] or 0,
+                "desconocidos": c["desconocidos"] or 0,
+                "alertas": alertas_campania(pct),
+            }
+        )
+
+    actividad = [
+        {
+            "filename": v["filename"],
+            "tipo": v["tipo"],
+            "tipo_corregido": v["tipo_corregido"],
+            "estado": v["estado"],
+            "revisor": v["revisor"],
+            "revisado_en": v["revisado_en"],
+            "revisado_linda": fecha_linda(v["revisado_en"]),
+        }
+        for v in con.execute(
+            """
+            SELECT filename, tipo, tipo_corregido, estado, revisor, revisado_en
+            FROM segmento WHERE revisor IS NOT NULL
+            ORDER BY revisado_en DESC LIMIT 6
+            """
+        ).fetchall()
+    ]
+
+    return {
+        "funnel": {
+            "fuentes": tot["fuentes"] or 0,
+            "detectados": tot["detectados"] or 0,
+            "en_cola": en_cola,
+            "revisados": revisados,
+            "pendientes": pendientes,
+            "confirmados": tot["confirmados"] or 0,
+            "vitrina": (
+                {"cantidad": vitrina[0], "fecha": vitrina[1]} if vitrina else None
+            ),
+        },
+        "campanias": campanias,
+        "actividad": actividad,
+        "pendientes": pendientes,
+    }
+
+
+def api_cola(con: sqlite3.Connection, pos: int = 0) -> dict:
+    """El segmento actual de la cola con todo su contexto de decisión."""
+    filas = con.execute(
+        "SELECT * FROM segmento WHERE estado = 'propuesto' ORDER BY fecha_hora_absoluta"
+    ).fetchall()
+    pendientes = len(filas)
+    revisados = con.execute(
+        "SELECT COUNT(*) FROM segmento WHERE revisor IS NOT NULL"
+    ).fetchone()[0]
+    total_cola = pendientes + revisados
+
+    if pendientes == 0:
+        # EA1: cola en cero = logro, con el resumen del día como trofeo.
+        hoy = con.execute(
+            """
+            SELECT SUM(estado = 'confirmado' AND tipo_corregido IS NULL) AS confirmados,
+                   SUM(estado = 'confirmado' AND tipo_corregido IS NOT NULL) AS corregidos,
+                   SUM(estado = 'descartado')  AS descartados,
+                   SUM(estado = 'desconocido') AS desconocidos
+            FROM segmento
+            WHERE revisor IS NOT NULL AND date(revisado_en) = date('now', 'localtime')
+            """
+        ).fetchone()
+        return {
+            "pendientes": 0,
+            "revisados": revisados,
+            "total": total_cola,
+            "segmento": None,
+            "hoy": {
+                "confirmados": hoy["confirmados"] or 0,
+                "corregidos": hoy["corregidos"] or 0,
+                "descartados": hoy["descartados"] or 0,
+                "desconocidos": hoy["desconocidos"] or 0,
+            },
+        }
+
+    pos = max(0, min(pos, pendientes - 1))
+    s = filas[pos]
+    tipo_propuesto = s["tipo"]
+    quien, confianza = quien_propuso(s)
+    dur = duracion_clip(s["clip_path"])
+
+    ejemplares = con.execute(
+        """
+        SELECT * FROM segmento
+        WHERE estado = 'confirmado' AND COALESCE(tipo_corregido, tipo) = ? AND filename != ?
+        ORDER BY (revisor IS NOT NULL) DESC, fecha_hora_absoluta LIMIT 3
+        """,
+        (tipo_propuesto, s["filename"]),
+    ).fetchall()
+    total_tipo = con.execute(
+        "SELECT COUNT(*) FROM segmento WHERE estado = 'confirmado' AND COALESCE(tipo_corregido, tipo) = ?",
+        (tipo_propuesto,),
+    ).fetchone()[0]
+
+    similares = None
+    if embeddings.hay_indice(con):
+        parecidos = embeddings.similares(con, s["filename"], n=3)
+        if parecidos is not None:
+            similares = []
+            for otro, score in parecidos:
+                fila = con.execute(
+                    "SELECT * FROM segmento WHERE filename = ?", (otro,)
+                ).fetchone()
+                if fila:
+                    similares.append(segmento_json(fila, score=score))
+
+    segmento = segmento_json(s)
+    segmento.update(
+        {
+            "inicio_grabacion": s["inicio_grabacion"],
+            "offset_s": s["offset_s"],
+            "duracion_s": round(dur, 3) if dur is not None else None,
+            "propuesto_por": quien,  # en criollo ("El clasificador v1", …)
+            "confianza": confianza,  # 0-1 o None (históricos)
+            "dudoso": "dudoso" in (s["filename"] or ""),
+            # Bajo 0,3 s el índice armónico no es confiable (informe §4.3).
+            "duracion_confiable": dur is None or dur >= 0.3,
+        }
+    )
+
+    return {
+        "pendientes": pendientes,
+        "revisados": revisados,
+        "total": total_cola,
+        "pos": pos,
+        "segmento": segmento,
+        "tipos_corregibles": TIPOS_CORREGIBLES,
+        "ejemplares": {"total": total_tipo, "items": [segmento_json(x) for x in ejemplares]},
+        "similares": similares,
+    }
+
+
+def api_segmentos(con: sqlite3.Connection, filtros: dict, pagina: int = 1) -> dict:
+    """Explorador paginado con los mismos filtros combinables de la vista HTML."""
+    condiciones, valores = [], []
+    for campo, columna in (("tipo", "tipo"), ("estado", "estado"), ("fuente", "fuente")):
+        if filtros.get(campo):
+            condiciones.append(f"{columna} = ?")
+            valores.append(filtros[campo])
+    donde = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+
+    total = con.execute(f"SELECT COUNT(*) FROM segmento {donde}", valores).fetchone()[0]
+    paginas = max(1, -(-total // PAGINA_TAMANIO))  # ceil
+    pagina = max(1, min(pagina, paginas))
+    items = con.execute(
+        f"SELECT * FROM segmento {donde} ORDER BY fecha_hora_absoluta LIMIT ? OFFSET ?",
+        [*valores, PAGINA_TAMANIO, (pagina - 1) * PAGINA_TAMANIO],
+    ).fetchall()
+
+    return {
+        "total": total,
+        "pagina": pagina,
+        "paginas": paginas,
+        "items": [segmento_json(s) for s in items],
+        "tipos": [r[0] for r in con.execute("SELECT DISTINCT tipo FROM segmento ORDER BY tipo")],
+        "estados": list(base.ESTADOS),
+        "fuentes": [
+            r[0] for r in con.execute("SELECT DISTINCT fuente FROM segmento ORDER BY fuente")
+        ],
+        "pendientes": contar_pendientes(con),
+    }
+
+
+def api_similares(con: sqlite3.Connection, filename: str) -> tuple[dict, int]:
+    """Top-10 por similitud coseno. Devuelve (payload, código HTTP)."""
+    s = con.execute("SELECT * FROM segmento WHERE filename = ?", (filename,)).fetchone()
+    if not s:
+        return {"error": "segmento_inexistente", "filename": filename}, 404
+    if not embeddings.hay_indice(con):
+        return {"segmento": segmento_json(s), "indice": False, "resultados": None}, 200
+    resultados = embeddings.similares(con, filename, n=10)
+    if resultados is None:
+        # Hay índice pero este clip todavía no está indexado.
+        return {"segmento": segmento_json(s), "indice": True, "resultados": None}, 200
+    tarjetas = []
+    for otro, score in resultados:
+        fila = con.execute("SELECT * FROM segmento WHERE filename = ?", (otro,)).fetchone()
+        if fila:
+            tarjetas.append(segmento_json(fila, score=score))
+    return {"segmento": segmento_json(s), "indice": True, "resultados": tarjetas}, 200
+
+
 # ---------- servidor ----------
 
 
@@ -1142,6 +1417,51 @@ class Manejador(BaseHTTPRequestHandler):
         self.send_response(303)
         self.send_header("Location", destino)
         self.end_headers()
+
+    def _responder_json(self, data: dict, codigo: int = 200) -> None:
+        datos = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        self.send_response(codigo)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin", "*")  # solo escucha en 127.0.0.1
+        self.send_header("Content-Length", str(len(datos)))
+        self.end_headers()
+        self.wfile.write(datos)
+
+    def do_OPTIONS(self) -> None:  # noqa: N802 — preflight CORS de la web local
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    def _atender_api_get(self, con: sqlite3.Connection, url) -> bool:
+        """Rutas /api/* de lectura. Devuelve True si la ruta era de la API."""
+        q = parse_qs(url.query)
+        if url.path == "/api/panel":
+            self._responder_json(api_panel(con))
+        elif url.path == "/api/cola":
+            try:
+                pos = int(q.get("pos", ["0"])[0])
+            except ValueError:
+                pos = 0
+            self._responder_json(api_cola(con, pos))
+        elif url.path == "/api/segmentos":
+            filtros = {k: q.get(k, [""])[0] for k in ("tipo", "estado", "fuente")}
+            try:
+                pagina = int(q.get("pagina", ["1"])[0])
+            except ValueError:
+                pagina = 1
+            self._responder_json(api_segmentos(con, filtros, pagina))
+        elif url.path.startswith("/api/similares/"):
+            payload, codigo = api_similares(con, url.path.removeprefix("/api/similares/"))
+            self._responder_json(payload, codigo)
+        elif url.path == "/api/pendientes":
+            self._responder_json({"pendientes": contar_pendientes(con)})
+        elif url.path.startswith("/api/"):
+            self._responder_json({"error": "ruta_inexistente", "ruta": url.path}, 404)
+        else:
+            return False
+        return True
 
     def _servir_media(self, con: sqlite3.Connection, clase: str, filename: str) -> None:
         columna = "clip_path" if clase == "clip" else "espectrograma_path"
@@ -1162,7 +1482,9 @@ class Manejador(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         con = base.conectar(self.ruta_db)
         try:
-            if url.path == "/":
+            if self._atender_api_get(con, url):
+                pass
+            elif url.path == "/":
                 self._responder(vista_panel(con))
             elif url.path == "/explorador":
                 q = parse_qs(url.query)
@@ -1186,8 +1508,46 @@ class Manejador(BaseHTTPRequestHandler):
         finally:
             con.close()
 
+    def _leer_cuerpo(self) -> dict:
+        """Body del POST como dict plano. Acepta JSON y form-encoded (mismo contrato)."""
+        largo = int(self.headers.get("Content-Length", 0))
+        crudo = self.rfile.read(largo).decode("utf-8")
+        if "json" in (self.headers.get("Content-Type") or ""):
+            try:
+                datos = json.loads(crudo)
+                return datos if isinstance(datos, dict) else {}
+            except json.JSONDecodeError:
+                return {}
+        return {k: v[0] for k, v in parse_qs(crudo).items()}
+
+    def _api_veredicto(self) -> None:
+        """POST /api/veredicto — mismo contrato del form de la cola, respuesta JSON."""
+        cuerpo = self._leer_cuerpo()
+        filename = cuerpo.get("filename") or ""
+        accion = cuerpo.get("accion") or ""
+        tipo_corregido = cuerpo.get("tipo_corregido") or None
+        con = base.conectar(self.ruta_db)
+        try:
+            existia = base.registrar_veredicto(
+                con, filename, accion, tipo_corregido, revisor="local"
+            )
+        except ValueError as err:
+            self._responder_json({"ok": False, "error": str(err)}, 400)
+            return
+        finally:
+            con.close()
+        if not existia:
+            self._responder_json(
+                {"ok": False, "error": f"segmento inexistente: {filename}"}, 404
+            )
+            return
+        self._responder_json({"ok": True, "filename": filename, "accion": accion})
+
     def do_POST(self) -> None:  # noqa: N802
         url = urlparse(self.path)
+        if url.path == "/api/veredicto":
+            self._api_veredicto()
+            return
         if url.path != "/cola/veredicto":
             self._responder("<h1>404</h1>", 404)
             return
