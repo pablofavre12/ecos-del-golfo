@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Ecos del Golfo — biblioteca abierta de sonidos de ballena franca austral en Puerto Pirámides, Golfo Nuevo.">
+<title>Bitácora de sonidos — Ecos del Golfo</title>
+<style>
+:root {
+  --fondo: #071019; --panel: #0c1b2b; --panel-2: #112438; --borde: #1c344f;
+  --texto: #dce8f7; --tenue: #8aa2c0; --acento: #f0a35e; --acento-fuerte: #e8863a;
+  --hipotesis: #e8863a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--fondo); color: var(--texto);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+  padding-top: 3.4rem; /* deja lugar al banner fijo */
+}
+a { color: var(--acento); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.banner-demo {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  background: #2b1a08; color: var(--acento); border-bottom: 1px solid var(--acento-fuerte);
+  padding: 0.55rem 1rem; text-align: center; font-size: 0.88rem; font-weight: 600;
+}
+
+header.portada {
+  max-width: 960px; margin: 0 auto; padding: 3.5rem 1.5rem 2.5rem; text-align: center;
+}
+header.portada h1 { font-size: clamp(1.9rem, 5vw, 3rem); font-weight: 700; letter-spacing: -0.01em; }
+header.portada h1 span { color: var(--acento); }
+header.portada .bajada {
+  color: var(--tenue); max-width: 620px; margin: 0.9rem auto 0; font-size: 1.05rem;
+}
+nav.publica {
+  display: flex; justify-content: center; gap: 1.6rem; margin-top: 1.6rem; font-size: 0.95rem;
+}
+nav.publica a.activo { color: var(--texto); border-bottom: 2px solid var(--acento); padding-bottom: 2px; }
+
+main { max-width: 1080px; margin: 0 auto; padding: 0 1.5rem 4rem; }
+h2 { font-size: 1.45rem; font-weight: 700; margin: 2.2rem 0 1.2rem; }
+
+.acciones { display: flex; justify-content: center; gap: 1rem; margin-top: 1.6rem; flex-wrap: wrap; }
+.boton {
+  display: inline-block; padding: 0.6rem 1.3rem; border-radius: 6px; font-size: 0.95rem;
+  font-weight: 600; border: 1px solid var(--borde); background: var(--panel-2); color: var(--texto);
+}
+.boton:hover { border-color: var(--acento); text-decoration: none; }
+.boton.primario { background: var(--acento-fuerte); border-color: var(--acento-fuerte); color: #14100a; }
+.boton.primario:hover { background: var(--acento); }
+
+.filtros { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-bottom: 1.6rem; }
+.filtros button {
+  font: inherit; font-size: 0.86rem; font-weight: 600; cursor: pointer;
+  padding: 0.38rem 0.95rem; border-radius: 999px; border: 1px solid var(--borde);
+  background: var(--panel-2); color: var(--texto);
+}
+.filtros button:hover { border-color: var(--acento); }
+.filtros button.activo { background: var(--acento-fuerte); border-color: var(--acento-fuerte); color: #14100a; }
+
+.grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1.3rem; }
+.sonido {
+  background: var(--panel); border: 1px solid var(--borde); border-radius: 8px; overflow: hidden;
+}
+.sonido img { width: 100%; display: block; background: #0a1524; }
+.sonido .cuerpo { padding: 0.9rem 1.05rem 1.1rem; }
+.sonido audio { width: 100%; height: 34px; margin: 0.6rem 0 0.2rem; }
+.fila-badges { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
+.badge-tipo {
+  font-size: 0.76rem; font-weight: 600; padding: 0.18rem 0.55rem; border-radius: 4px;
+  background: var(--panel-2); border: 1px solid var(--borde);
+}
+.badge-hipotesis {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; padding: 0.18rem 0.55rem;
+  border-radius: 4px; background: var(--hipotesis); color: #14100a; cursor: help;
+}
+.meta { color: var(--tenue); font-size: 0.82rem; margin-top: 0.5rem; }
+
+.entrada-bitacora {
+  background: var(--panel); border: 1px solid var(--borde); border-radius: 8px;
+  padding: 1.6rem; margin-bottom: 1.8rem;
+}
+.entrada-bitacora h3 { font-size: 1.2rem; font-weight: 700; }
+.entrada-bitacora .descripcion { color: var(--tenue); margin: 0.6rem 0 1rem; max-width: 640px; }
+.entrada-bitacora img { width: 100%; max-height: 340px; object-fit: contain; background: #0a1524; border-radius: 6px; }
+.entrada-bitacora audio { width: 100%; margin-top: 0.8rem; }
+
+.nota-hipotesis {
+  background: var(--panel); border: 1px solid var(--borde); border-left: 3px solid var(--hipotesis);
+  border-radius: 6px; padding: 0.9rem 1.1rem; color: var(--tenue); font-size: 0.9rem; margin: 1.4rem 0;
+}
+
+footer {
+  border-top: 1px solid var(--borde); margin-top: 2rem; padding: 1.8rem 1.5rem 2.4rem;
+  text-align: center; color: var(--tenue); font-size: 0.88rem;
+}
+@media (max-width: 560px) {
+  body { padding-top: 4.1rem; }
+  header.portada { padding-top: 2.2rem; }
+  .grilla { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="banner-demo">⚠️ Demostración con datos sintéticos — los sonidos reales del Golfo se cargan próximamente</div>
+<header class="portada">
+  <h1>Ecos <span>del Golfo</span></h1>
+  <p class="bajada">Una biblioteca abierta de los sonidos de la ballena franca austral
+  registrados desde Puerto Pirámides, Golfo Nuevo, Península Valdés.</p>
+  <nav class="publica">
+    <a href="index.html">Catálogo</a>
+    <a href="bitacora.html" class="activo">Bitácora de sonidos</a>
+  </nav>
+</header>
+<main>
+<h2>Bitácora de sonidos</h2>
+<p style="color:var(--tenue);max-width:640px;margin-bottom:1.6rem">
+Cinco sonidos elegidos del catálogo para conocer el repertorio de la ballena
+franca austral, con las descripciones apoyadas en la bibliografía clásica del
+área (Clark, 1982).</p>
+<section class="entrada-bitacora">
+  <div class="fila-badges" style="margin-bottom:0.5rem">
+    <span class="badge-tipo">Up-call</span>
+    <span class="badge-hipotesis" title="Identificación pendiente de validación experta">HIPÓTESIS</span>
+  </div>
+  <h3>Así suena un up-call — el llamado de contacto</h3>
+  <p class="descripcion">Un barrido grave que sube de tono en un segundo. Es el sonido más característico de la ballena franca austral: Clark (1982) lo describe como el llamado de contacto con el que una ballena anuncia dónde está y busca respuesta de otras.</p>
+  <img src="media/espectrogramas/2026-08-03_17h48m19s_up_call.png" alt="Espectrograma de 2026-08-03_17h48m19s_up_call.wav" loading="lazy">
+  <audio controls preload="none" src="media/clips/2026-08-03_17h48m19s_up_call.wav"></audio>
+  <p class="meta">2026-08-03 17:48:19 · embarcacion-2026-08</p>
+</section><section class="entrada-bitacora">
+  <div class="fila-badges" style="margin-bottom:0.5rem">
+    <span class="badge-tipo">High call</span>
+    <span class="badge-hipotesis" title="Identificación pendiente de validación experta">HIPÓTESIS</span>
+  </div>
+  <h3>El high call — un aviso más agudo</h3>
+  <p class="descripcion">Un tono más alto y sostenido que el up-call. En el repertorio que Clark (1982) registró en Península Valdés aparece asociado a ballenas activas, muchas veces mezclado con otros llamados en secuencias de interacción.</p>
+  <img src="media/espectrogramas/2025-10-04_09h04m59s_high_call.png" alt="Espectrograma de 2025-10-04_09h04m59s_high_call.wav" loading="lazy">
+  <audio controls preload="none" src="media/clips/2025-10-04_09h04m59s_high_call.wav"></audio>
+  <p class="meta">2025-10-04 09:04:59 · muelle-madryn-2025-10</p>
+</section><section class="entrada-bitacora">
+  <div class="fila-badges" style="margin-bottom:0.5rem">
+    <span class="badge-tipo">Pulsive call</span>
+    <span class="badge-hipotesis" title="Identificación pendiente de validación experta">HIPÓTESIS</span>
+  </div>
+  <h3>El pulsive call — el gruñido áspero de los grupos</h3>
+  <p class="descripcion">Un sonido pulsado, áspero, casi un gruñido bajo el agua. Clark (1982) lo asocia a los grupos socialmente activos: cuanto más revuelo hay en superficie, más de estos llamados se escuchan.</p>
+  <img src="media/espectrogramas/2025-10-04_09h01m25s_pulsive_call.png" alt="Espectrograma de 2025-10-04_09h01m25s_pulsive_call.wav" loading="lazy">
+  <audio controls preload="none" src="media/clips/2025-10-04_09h01m25s_pulsive_call.wav"></audio>
+  <p class="meta">2025-10-04 09:01:25 · muelle-madryn-2025-10</p>
+</section><section class="entrada-bitacora">
+  <div class="fila-badges" style="margin-bottom:0.5rem">
+    <span class="badge-tipo">Gunshot</span>
+    <span class="badge-hipotesis" title="Identificación pendiente de validación experta">HIPÓTESIS</span>
+  </div>
+  <h3>El gunshot — un estampido bajo el agua</h3>
+  <p class="descripcion">Un estallido corto y de banda ancha, como un disparo amortiguado por el mar. Se le atribuye a la ballena franca un rol de señal — posiblemente de los machos — y es inconfundible en el espectrograma: una columna vertical que cruza todas las frecuencias.</p>
+  <img src="media/espectrogramas/2026-08-03_17h59m02s_gunshot_call.png" alt="Espectrograma de 2026-08-03_17h59m02s_gunshot_call.wav" loading="lazy">
+  <audio controls preload="none" src="media/clips/2026-08-03_17h59m02s_gunshot_call.wav"></audio>
+  <p class="meta">2026-08-03 17:59:02 · embarcacion-2026-08</p>
+</section><section class="entrada-bitacora">
+  <div class="fila-badges" style="margin-bottom:0.5rem">
+    <span class="badge-tipo">Sin clasificar</span>
+    <span class="badge-hipotesis" title="Identificación pendiente de validación experta">HIPÓTESIS</span>
+  </div>
+  <h3>Un sonido que todavía no tiene nombre</h3>
+  <p class="descripcion">No todo lo que se escucha en el Golfo entra prolijo en una categoría. Este quedó confirmado como sonido de interés, pero su tipo sigue abierto — así también se ve la ciencia en proceso.</p>
+  <img src="media/espectrogramas/2025-10-06_15h14m24s_no_clasificado.png" alt="Espectrograma de 2025-10-06_15h14m24s_no_clasificado.wav" loading="lazy">
+  <audio controls preload="none" src="media/clips/2025-10-06_15h14m24s_no_clasificado.wav"></audio>
+  <p class="meta">2025-10-06 15:14:24 · muelle-madryn-2025-10</p>
+</section>
+<div class="acciones" style="justify-content:flex-start">
+  <a class="boton" href="index.html">Volver al catálogo completo</a>
+  <a class="boton" href="mailto:ecosdelgolfo@example.com?subject=Solicitud%20de%20audios%20crudos%20%E2%80%94%20Ecos%20del%20Golfo">Solicitar audios crudos</a>
+</div>
+</main>
+<footer>
+  <p>Ecos del Golfo · Puerto Pirámides · código abierto (<a href="https://github.com/Perennia-Regeneracion/ecos-del-golfo/blob/main/LICENSE">MIT</a>)</p>
+  <p style="margin-top:0.3rem"><a href="https://github.com/Perennia-Regeneracion/ecos-del-golfo">Ver el código y los datos en el repositorio</a></p>
+</footer>
+
+</body>
+</html>

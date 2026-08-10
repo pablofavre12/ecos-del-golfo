@@ -9,6 +9,11 @@ datos/
 crudos/
 *.WAV
 
+# Respaldo del catálogo (R20): las copias .db quedan solo locales,
+# el export CSV más reciente SÍ se commitea (backup en la nube vía el repo)
+respaldo/*
+!respaldo/catalogo-export.csv
+
 # Python
 __pycache__/
 *.pyc
