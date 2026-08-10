@@ -27,7 +27,7 @@ from pathlib import Path
 import base
 
 RAIZ = Path(__file__).parent
-REPO_URL = "https://github.com/Perennia-Regeneracion/ecos-del-golfo"
+REPO_URL = "https://github.com/pablofavre12/ecos-del-golfo"
 MAILTO = (
     "mailto:ecosdelgolfo@example.com"
     "?subject=Solicitud%20de%20audios%20crudos%20%E2%80%94%20Ecos%20del%20Golfo"
