@@ -197,7 +197,7 @@ def _pagina(titulo: str, activo: str, cuerpo: str, extra_js: str = "") -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Ecos del Golfo — biblioteca abierta de sonidos de ballena franca austral en Puerto Pirámides, Golfo Nuevo.">
+<meta name="description" content="Ecos del Golfo — biblioteca abierta del paisaje sonoro del mar de Península Valdés, registrado desde Puerto Pirámides.">
 <title>{e(titulo)} — Ecos del Golfo</title>
 <style>{ESTILO}</style>
 </head>
@@ -205,8 +205,8 @@ def _pagina(titulo: str, activo: str, cuerpo: str, extra_js: str = "") -> str:
 <div class="banner-demo">⚠️ Demostración con datos sintéticos — los sonidos reales del Golfo se cargan próximamente</div>
 <header class="portada">
   <h1>Ecos <span>del Golfo</span></h1>
-  <p class="bajada">Una biblioteca abierta de los sonidos de la ballena franca austral
-  registrados desde Puerto Pirámides, Golfo Nuevo, Península Valdés.</p>
+  <p class="bajada">Una biblioteca abierta del paisaje sonoro del mar de Península Valdés
+  — ballenas, delfines, viento, motores — registrado desde Puerto Pirámides, Golfo Nuevo.</p>
   <nav class="publica">
     {nav("index.html", "Catálogo", "catalogo")}
     {nav("bitacora.html", "Bitácora de sonidos", "bitacora")}
