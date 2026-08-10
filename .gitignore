@@ -1,0 +1,16 @@
+# Base de datos local (se regenera con importar.py)
+ecos.db
+
+# Fixtures sintéticos (se regeneran con generar_fixtures.py)
+fixtures/
+
+# Datos reales — NUNCA al repo (los crudos viven en discos, D7)
+datos/
+crudos/
+*.WAV
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
