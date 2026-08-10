@@ -4,7 +4,22 @@ Prototipo local de la biblioteca acústica del Golfo. Wow 1 (WCH-467): generador
 de fixtures sintéticos, importador a SQLite y tablero web local con salud del
 catálogo, explorador y cola de revisión. Wow 2 (WCH-468): búsqueda inversa por
 similitud ("¿qué otros clips suenan como este?") y la vitrina pública estática
-para GitHub Pages.
+para GitHub Pages. WCH-473: la **web nueva** (`web/`, Next.js + shadcn/ui, tema
+"abismo") como puerta principal del tablero.
+
+## La puerta principal: la web
+
+```bash
+./ecos.sh     # levanta la cocina Python (:8477) + la web (:3477) juntas
+```
+
+→ **http://localhost:3477** — Panel (el viaje de un sonido), Revisar (la cola,
+con atajos de teclado), Biblioteca (explorador con filtros) y búsqueda inversa.
+La web consume la API JSON de `tablero.py`; los datos siguen saliendo solo de
+`ecos.db`. Detalles en [`web/README.md`](web/README.md).
+
+El **tablero HTML v2** (`python tablero.py` → http://localhost:8477) queda como
+fallback sin Node: mismas vistas, cero dependencias.
 
 El catálogo (SQLite, `ecos.db`) es la **única fuente de verdad** de conteos y
 estados (D10 del contrato de producto): todo lo que ves en el tablero sale de

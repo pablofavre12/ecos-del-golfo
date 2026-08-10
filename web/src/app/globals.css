@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Ecos del Golfo — tema "abismo"
+   El Golfo Nuevo de noche: azul-negro profundo, acento
+   bioluminiscente (cian-verde agua, como el plancton) para
+   datos/info/focus, y ámbar cálido SOLO para la acción primaria
+   (continuidad con la vitrina). Jewel colors = estado, nada más.
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+
+  /* --- abismo: superficies --- */
+  --fondo: #060d18;
+  --superficie: #0b1727; /* arriba del gradiente, cerca de la superficie */
+  --abisal: #04080f; /* el fondo del fondo */
+  --panel: #0c1728;
+  --panel-2: #101f33;
+  --panel-3: #16294a;
+  --borde: #1b2f4d;
+  --borde-fuerte: #2a4a74;
+
+  /* --- texto --- */
+  --texto: #d8e5f4;
+  --tenue: #869cbd;
+  --mas-tenue: #5b7395;
+
+  /* --- bioluminiscencia: datos / info / focus --- */
+  --bio: #59e3c0;
+  --bio-fuerte: #2dd4a8;
+
+  /* --- ámbar: SOLO acción primaria --- */
+  --ambar: #f0a35e;
+  --ambar-fuerte: #e8863a;
+  --sobre-ambar: #150e05;
+
+  /* --- jewel colors: solo estado --- */
+  --confirmado: #46c493;
+  --propuesto: #eec95d;
+  --descartado: #e08078;
+  --desconocido: #8fa3c4;
+
+  /* --- mapa a los tokens shadcn --- */
+  --background: var(--fondo);
+  --foreground: var(--texto);
+  --card: var(--panel);
+  --card-foreground: var(--texto);
+  --popover: var(--panel-2);
+  --popover-foreground: var(--texto);
+  --primary: var(--ambar-fuerte);
+  --primary-foreground: var(--sobre-ambar);
+  --secondary: var(--panel-2);
+  --secondary-foreground: var(--texto);
+  --muted: var(--panel-2);
+  --muted-foreground: var(--tenue);
+  --accent: var(--panel-3);
+  --accent-foreground: var(--texto);
+  --destructive: var(--descartado);
+  --destructive-foreground: #1a0c0a;
+  --border: var(--borde);
+  --input: var(--borde-fuerte);
+  --ring: var(--bio);
+
+  /* radio contenido: 2px estructural, ~6px interactivo (nada burbuja) */
+  --radius: 0.25rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* identidad */
+  --color-bio: var(--bio);
+  --color-bio-fuerte: var(--bio-fuerte);
+  --color-ambar: var(--ambar);
+  --color-ambar-fuerte: var(--ambar-fuerte);
+  --color-sobre-ambar: var(--sobre-ambar);
+  --color-confirmado: var(--confirmado);
+  --color-propuesto: var(--propuesto);
+  --color-descartado: var(--descartado);
+  --color-desconocido: var(--desconocido);
+  --color-panel-2: var(--panel-2);
+  --color-panel-3: var(--panel-3);
+  --color-borde-fuerte: var(--borde-fuerte);
+  --color-tenue: var(--tenue);
+  --color-mas-tenue: var(--mas-tenue);
+  --color-abisal: var(--abisal);
+
+  --font-sans: var(--font-instrument), "Instrument Sans", system-ui, sans-serif;
+  --font-mono: var(--font-spline-mono), "Spline Sans Mono", ui-monospace, monospace;
+  --font-display: var(--font-fraunces), "Fraunces", Georgia, serif;
+
+  --radius-sm: calc(var(--radius) - 2px); /* 2px: estructural */
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px); /* 6px: interactivo */
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--texto);
+  /* profundidad: de la superficie al abisal, con un tenue resplandor
+     bioluminiscente arriba — apenas perceptible, nunca protagonista */
+  background:
+    radial-gradient(70rem 22rem at 50% -8rem, rgba(89, 227, 192, 0.05), transparent 65%),
+    linear-gradient(180deg, var(--superficie) 0%, var(--fondo) 34rem, var(--abisal) 100%);
+  background-attachment: fixed;
+  background-color: var(--fondo);
+  min-height: 100dvh;
+}
+
+::selection {
+  background: rgba(89, 227, 192, 0.28);
+}
+
+:focus-visible {
+  outline: 2px solid var(--bio);
+  outline-offset: 2px;
+}
+
+/* números siempre tabulares donde haya datos */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+kbd {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--texto);
+  background: var(--panel-3);
+  border: 1px solid var(--borde-fuerte);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0.18rem 0.4rem;
+  white-space: nowrap;
+}
+
+audio {
+  width: 100%;
+  height: 36px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
